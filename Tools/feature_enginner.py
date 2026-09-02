@@ -19,12 +19,53 @@ class FeatureEngineering:
         self.df = df.copy()
         self.save_csv = save_csv
         self.csv_path = csv_path
+        self.clip_bounds = {}
+        self.glucose_mean = None
+        self.glucose_std = None
+        self.is_fitted = False
+
+    def fit(self):
+        """Learn preprocessing statistics from the training data only."""
+        for col in ["sysBP", "diaBP", "totChol", "glucose", "cigsPerDay", "BMI"]:
+            if col in self.df.columns:
+                self.clip_bounds[col] = (
+                    self.df[col].quantile(0.005),
+                    self.df[col].quantile(0.995),
+                )
+
+        if "glucose" in self.df.columns:
+            self.glucose_mean = float(self.df["glucose"].mean())
+            glucose_std = float(self.df["glucose"].std())
+            self.glucose_std = glucose_std if glucose_std > 0 else 1.0
+
+        self.is_fitted = True
+        return self
 
     def cap_outliers(self, col):
         # Clip extreme values to reduce the effect of outliers
-        low = self.df[col].quantile(0.005)
-        high = self.df[col].quantile(0.995)
+        if not self.is_fitted:
+            self.fit()
+        low, high = self.clip_bounds[col]
         self.df[col] = self.df[col].clip(low, high)
+
+    def _transform_frame(self, frame):
+        if not self.is_fitted:
+            raise RuntimeError("FeatureEngineering.fit() must run before transforming data")
+
+        transformed = frame.copy()
+        for col, (low, high) in self.clip_bounds.items():
+            if col in transformed.columns:
+                transformed[col] = transformed[col].clip(low, high)
+
+        transformed["pulse_pressure"] = transformed["sysBP"] - transformed["diaBP"]
+        transformed["difference_bp_ratio"] = (
+            transformed["pulse_pressure"] / transformed["sysBP"].replace(0, np.nan)
+        )
+        transformed["obese_flag"] = (transformed["BMI"] >= 30).astype(int)
+        transformed["glucose_norm"] = (
+            transformed["glucose"] - self.glucose_mean
+        ) / self.glucose_std
+        return transformed
 
     def transform(self):
         """
@@ -32,22 +73,9 @@ class FeatureEngineering:
         Use this on the training data.
         Cleans the dataset and generates new features for model training.
         """
-        # Cap outliers for main numeric columns
-        for col in ["sysBP", "diaBP", "totChol", "glucose", "cigsPerDay", "BMI"]:
-            if col in self.df.columns:
-                self.cap_outliers(col)
-
-        # Pulse pressure
-        self.df["pulse_pressure"] = self.df["sysBP"] - self.df["diaBP"]
-
-        # NEW: ratio of pressure difference
-        self.df["difference_bp_ratio"] = self.df["pulse_pressure"] / self.df["sysBP"]
-
-        # Obesity flag
-        self.df["obese_flag"] = (self.df["BMI"] >= 30).astype(int)
-
-        # Normalize glucose
-        self.df["glucose_norm"] = (self.df["glucose"] - self.df["glucose"].mean()) / self.df["glucose"].std()
+        if not self.is_fitted:
+            self.fit()
+        self.df = self._transform_frame(self.df)
 
         # Save to CSV if enabled
         if self.save_csv:
@@ -62,20 +90,9 @@ class FeatureEngineering:
         Applies the same feature engineering as on the training data,
         so the model receives consistent features.
         """
-        df_new = df_new.copy()
-
-        # Pulse pressure and ratio
-        if "sysBP" in df_new and "diaBP" in df_new:
-            df_new["pulse_pressure"] = df_new["sysBP"] - df_new["diaBP"]
-            df_new["difference_bp_ratio"] = df_new["pulse_pressure"] / df_new["sysBP"]
-
-        # Obesity flag
-        if "BMI" in df_new:
-            df_new["obese_flag"] = (df_new["BMI"] >= 30).astype(int)
-
-        # Normalize glucose
-        if "glucose" in df_new:
-            df_new["glucose_norm"] = (df_new["glucose"] - df_new["glucose"].mean()) / df_new["glucose"].std()
+        if not self.is_fitted:
+            self.fit()
+        df_new = self._transform_frame(df_new)
 
         # Save to CSV if enabled
         if self.save_csv:

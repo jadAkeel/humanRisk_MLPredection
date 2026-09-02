@@ -14,7 +14,7 @@ The model is trained on the **Framingham Heart Study dataset**, a well-known med
 
 * Handled missing values
 * Encoded categorical features
-* Split data (80% training / 20% testing)
+* Split data (70% training / 30% held-out testing), stratified by outcome
 
 ---
 
@@ -28,7 +28,7 @@ The model is trained on the **Framingham Heart Study dataset**, a well-known med
 ### 3. Model Optimization
 
 * Used **GridSearchCV** for hyperparameter tuning
-* Applied **Decision Tree pruning** to reduce overfitting
+* Selected the **Decision Tree pruning** parameter with 5-fold cross-validation on the training set
 
 ---
 
@@ -37,6 +37,7 @@ The model is trained on the **Framingham Heart Study dataset**, a well-known med
 * Created new features (e.g., Pulse Pressure = `sysBP - diaBP`)
 * Added interaction features
 * Removed low-impact variables
+* Learned clipping and normalization statistics from the training partition only to keep the held-out evaluation isolated
 
 ---
 
@@ -57,7 +58,7 @@ The model is trained on the **Framingham Heart Study dataset**, a well-known med
 
 * Improved accuracy, precision, and recall
 * Better detection of at-risk patients
-* ~70% accuracy on final model
+* Approximately 70% accuracy on the held-out test set
 
 ---
 
@@ -74,3 +75,6 @@ The model is trained on the **Framingham Heart Study dataset**, a well-known med
 ## ⚠️ Disclaimer
 
 This project is for educational purposes only and not for medical use.
+
+The included project report has student identifiers removed. Synthetic patient
+records are generated for technical evaluation and are not real patient data.
